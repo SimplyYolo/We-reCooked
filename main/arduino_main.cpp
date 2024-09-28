@@ -25,6 +25,7 @@ limitations under the License.
 #include <ESP32Servo.h>
 #include <ESP32SharpIR.h>
 #include <QTRSensors.h>
+#define LED 2
 
 GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 
@@ -63,6 +64,8 @@ void setup() {
 	ESP32PWM::allocateTimer(3);
 
     // TODO: Write your setup code here
+    pinMode (LED, INPUT);
+    pinMode (LED, OUTPUT);
 }
 
 // Arduino loop function. Runs in CPU 1
@@ -78,6 +81,9 @@ void loop() {
     }
 
     // TODO: Write your periodic code here
-
-    vTaskDelay(1);
+    vTaskDelay(1000);
+    digitalWrite(LED, HIGH);
+    vTaskDelay(1000);
+    digitalWrite(LED, LOW);
+    
 }
