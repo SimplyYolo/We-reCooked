@@ -25,7 +25,11 @@ limitations under the License.
 #include <ESP32Servo.h>
 #include <ESP32SharpIR.h>
 #include <QTRSensors.h>
+<<<<<<< HEAD
 #include <Arduino_APDS9960.h>
+=======
+#define LED 2
+>>>>>>> 0068f45bde7d7e0c2b86d0b3e9536807228d3189
 
 GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 #define LED 2
@@ -122,6 +126,8 @@ void setup() {
     */
 
     // TODO: Write your setup code here
+    pinMode (LED, INPUT);
+    pinMode (LED, OUTPUT);
 }
 /*
 void CheckDistance(int ledPin)
@@ -201,6 +207,9 @@ void loop() {
     //delay(5000); 
 
     // TODO: Write your periodic code here
-
-    vTaskDelay(1);
+    vTaskDelay(1000);
+    digitalWrite(LED, HIGH);
+    vTaskDelay(1000);
+    digitalWrite(LED, LOW);
+    
 }
