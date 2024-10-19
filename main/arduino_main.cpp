@@ -25,8 +25,28 @@ limitations under the License.
 #include <ESP32Servo.h>
 #include <ESP32SharpIR.h>
 #include <QTRSensors.h>
+#include <Arduino_APDS9960.h>
 
 GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
+#define LED 2
+
+//Color Sensor
+#define APDS9960_INT 0
+#define I2C_SDA 21
+#define I2C_SCL 22
+#define I2C_FREQ 100000
+
+TwoWire I2C_0 = TwoWire(0);
+APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
+
+#define TIME_OUT 2500;
+QTRSensors qtr;
+
+const uint8_t SensorCount = 2;
+uint16_t sensorValues[SensorCount];
+
+#define SensorPin 26
+SharpIR sensor(ESP32SharpIR::GP2Y0A21YK0F, SensorPin);
 
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
@@ -62,9 +82,61 @@ void setup() {
 	ESP32PWM::allocateTimer(2);
 	ESP32PWM::allocateTimer(3);
 
+    pinMode(LED, OUTPUT);
+
+// color sensor
+    I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
+    sensor.setInterruptPin(APDS9960_INT);
+    sensor.begin();
+    Serial.begin(115200);
+// QTR line sensor
+    /*
+    qtr.setTypeRC();
+    qtr.setSensorPins((const uint8_t[]){33, 25}, SensorCount);
+    qtr.setEmitterPin(32);
+
+    //calibrate
+    digitalWrite(LED, HIGH);
+    for (int i = 0; i < 400; i++)
+    {
+        qtr.calibrate();
+    }
+
+    for (uint8_t i = 0; i < SensorCount; i++)
+    {
+        Serial.print(qtr.calibrationOn.minimum[i]);
+        Serial.print(' ');
+    }
+    Serial.println();
+
+    // print the calibration maximum values measured when emitters were on
+    for (uint8_t i = 0; i < SensorCount; i++)
+    {
+        Serial.print(qtr.calibrationOn.maximum[i]);
+        Serial.print(' ');
+    }
+    Serial.println();
+    Serial.println();
+    delay(1000);
+    digitalWrite(LED, LOW);
+    */
+
     // TODO: Write your setup code here
 }
-
+/*
+void CheckDistance(int ledPin)
+{
+    float Distance = pig.getDistance();
+    if (Distance < 5.0f)
+    {
+        digitalWrite(ledPin, HIGH);
+    }
+    else 
+    {
+        digitalWrite(ledPin, LOW);
+    }
+}
+*/
 // Arduino loop function. Runs in CPU 1
 void loop() {
     BP32.update();
@@ -76,6 +148,57 @@ void loop() {
 
         }
     }
+
+//color sensor
+/*
+    while(!sensor.colorAvailable())
+    {
+        delay(5);
+    }
+
+    int r, g, b, a;
+    sensor.readColor(r, g, b, a);
+
+    Serial.print("r = ");
+    Serial.print(r);
+    Serial.print("r = ");
+    Serial.print(g);
+    Serial.print("r = ");
+    Serial.print(b);
+*/
+
+    //QTR Sensor 
+    /*
+    uint16_t position = qtr.readLineBlack(sensorValues);
+    int i=0;
+    int line1= sensorValues[i=0];
+    int line2= sensorValues[i=1];
+    //int line3= sensorValues[i=2]; extra lines for each additional sensor
+    //int line4= sensorValues[i=3];
+
+    
+    for (int i=0; i < SensorCount; i++)
+    {
+        Serial.print(sensorValues[i]);
+        Serial.print('\t');
+    }
+    Serial.println();
+    
+
+    Serial.print("Sensor 1: ");
+    Serial.print(line1);
+    Serial.print("\n");
+    Serial.print("Sensor 2: ");
+    Serial.print(line2);
+    Serial.print("\n");
+
+    delay(250);
+    */
+
+    //digitalWrite(LED, HIGH);  // turn the LED on (HIGH is the voltage level)
+     //delay(5000);                      // wait for a second
+     //digitalWrite(LED, LOW);   // turn the LED off by making the voltage LOW
+    //delay(5000); 
 
     // TODO: Write your periodic code here
 
