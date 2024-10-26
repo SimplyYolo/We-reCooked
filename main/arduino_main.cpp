@@ -25,11 +25,7 @@ limitations under the License.
 #include <ESP32Servo.h>
 #include <ESP32SharpIR.h>
 #include <QTRSensors.h>
-<<<<<<< HEAD
 #include <Arduino_APDS9960.h>
-=======
-#define LED 2
->>>>>>> 0068f45bde7d7e0c2b86d0b3e9536807228d3189
 
 GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 #define LED 2
@@ -46,11 +42,11 @@ APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 #define TIME_OUT 2500;
 QTRSensors qtr;
 
-const uint8_t SensorCount = 2;
+const uint8_t SensorCount = 4;
 uint16_t sensorValues[SensorCount];
 
-#define SensorPin 26
-SharpIR sensor(ESP32SharpIR::GP2Y0A21YK0F, SensorPin);
+#define SensorPin 12
+ESP32SharpIR pig(ESP32SharpIR::GP2Y0A21YK0F, SensorPin);
 
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
@@ -75,11 +71,12 @@ void onDisconnectedGamepad(GamepadPtr gp) {
     }
 }
 
+
 // Arduino setup function. Runs in CPU 1
 void setup() {
     // Setup the Bluepad32 callbacks
-    BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
-    BP32.forgetBluetoothKeys();
+    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
+    //BP32.forgetBluetoothKeys();
 
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
@@ -88,16 +85,18 @@ void setup() {
 
     pinMode(LED, OUTPUT);
 
+//IRsensor
+pig.setFilterRate(1.0f);
+
 // color sensor
     I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
     sensor.setInterruptPin(APDS9960_INT);
     sensor.begin();
     Serial.begin(115200);
 // QTR line sensor
-    /*
-    qtr.setTypeRC();
-    qtr.setSensorPins((const uint8_t[]){33, 25}, SensorCount);
-    qtr.setEmitterPin(32);
+    
+    qtr.setTypeAnalog();
+    qtr.setSensorPins((const uint8_t[]){33, 25, 32, 26}, SensorCount);
 
     //calibrate
     digitalWrite(LED, HIGH);
@@ -123,30 +122,29 @@ void setup() {
     Serial.println();
     delay(1000);
     digitalWrite(LED, LOW);
-    */
+    
 
     // TODO: Write your setup code here
-    pinMode (LED, INPUT);
-    pinMode (LED, OUTPUT);
 }
-/*
-void CheckDistance(int ledPin)
+
+void CheckDistance()
 {
-    float Distance = pig.getDistance();
+    float Distance = pig.getDistanceFloat();
+    Serial.print(Distance);
     if (Distance < 5.0f)
     {
-        digitalWrite(ledPin, HIGH);
+        digitalWrite(LED, HIGH);
     }
     else 
     {
-        digitalWrite(ledPin, LOW);
+        digitalWrite(LED, LOW);
     }
 }
-*/
+
 // Arduino loop function. Runs in CPU 1
 void loop() {
-    BP32.update();
-
+    //BP32.update();
+    /*
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
         GamepadPtr myGamepad = myGamepads[i];
         if (myGamepad && myGamepad->isConnected()) {
@@ -154,9 +152,11 @@ void loop() {
 
         }
     }
+    */
+//CheckDistance();
 
 //color sensor
-/*
+
     while(!sensor.colorAvailable())
     {
         delay(5);
@@ -171,16 +171,16 @@ void loop() {
     Serial.print(g);
     Serial.print("r = ");
     Serial.print(b);
-*/
+
 
     //QTR Sensor 
     /*
-    uint16_t position = qtr.readLineBlack(sensorValues);
+    qtr.readLineBlack(sensorValues);
     int i=0;
     int line1= sensorValues[i=0];
     int line2= sensorValues[i=1];
-    //int line3= sensorValues[i=2]; extra lines for each additional sensor
-    //int line4= sensorValues[i=3];
+    int line3= sensorValues[i=2]; 
+    int line4= sensorValues[i=3];
 
     
     for (int i=0; i < SensorCount; i++)
@@ -197,9 +197,15 @@ void loop() {
     Serial.print("Sensor 2: ");
     Serial.print(line2);
     Serial.print("\n");
-
-    delay(250);
+    Serial.print("Sensor 3: ");
+    Serial.print(line3);
+    Serial.print("\n");
+    Serial.print("Sensor 4: ");
+    Serial.print(line4);
+    Serial.print("\n");
     */
+    delay(250);
+    
 
     //digitalWrite(LED, HIGH);  // turn the LED on (HIGH is the voltage level)
      //delay(5000);                      // wait for a second
@@ -207,9 +213,6 @@ void loop() {
     //delay(5000); 
 
     // TODO: Write your periodic code here
-    vTaskDelay(1000);
-    digitalWrite(LED, HIGH);
-    vTaskDelay(1000);
-    digitalWrite(LED, LOW);
-    
+
+    vTaskDelay(1);
 }
