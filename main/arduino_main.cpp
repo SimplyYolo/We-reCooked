@@ -86,7 +86,7 @@ void setup() {
     pinMode(LED, OUTPUT);
 
 //IRsensor
-pig.setFilterRate(1.0f);
+    pig.setFilterRate(1.0f);
 
 // color sensor
     I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
@@ -99,6 +99,7 @@ pig.setFilterRate(1.0f);
     qtr.setSensorPins((const uint8_t[]){33, 25, 32, 26}, SensorCount);
 
     //calibrate
+    /*
     digitalWrite(LED, HIGH);
     for (int i = 0; i < 400; i++)
     {
@@ -122,15 +123,17 @@ pig.setFilterRate(1.0f);
     Serial.println();
     delay(1000);
     digitalWrite(LED, LOW);
-    
+    */
 
     // TODO: Write your setup code here
+    Serial.print("Distance: ");
 }
 
 void CheckDistance()
 {
     float Distance = pig.getDistanceFloat();
     Serial.print(Distance);
+    //Serial.print("\n");
     if (Distance < 5.0f)
     {
         digitalWrite(LED, HIGH);
@@ -153,10 +156,10 @@ void loop() {
         }
     }
     */
-//CheckDistance();
+CheckDistance();
 
 //color sensor
-
+    /*
     while(!sensor.colorAvailable())
     {
         delay(5);
@@ -167,11 +170,16 @@ void loop() {
 
     Serial.print("r = ");
     Serial.print(r);
-    Serial.print("r = ");
+    Serial.print("\n");
+    Serial.print("g = ");
     Serial.print(g);
-    Serial.print("r = ");
+    Serial.print("\n");
+    Serial.print("b = ");
     Serial.print(b);
+    Serial.print("\n");
 
+    delay(5000);
+    */
 
     //QTR Sensor 
     /*
