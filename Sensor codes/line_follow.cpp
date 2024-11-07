@@ -26,7 +26,7 @@ QTRSensors qtr;
 const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
 
-//int P, D, I, previousError, PIDvalue, error;
+int P, D, I, previousError, PIDvalue, error;
 int lsp, rsp;
 int lfspeed = 200;
 
@@ -70,34 +70,24 @@ void onDisconnectedGamepad(GamepadPtr gp) {
     }
 }
 
+void SpinForward(int INA, int INB, int PWM, int speed)
+{
+    digitalWrite(INA, HIGH);
+    digitalWrite(INB, LOW);
+    analogWrite(PWM, speed);
+}
 
-// Arduino setup function. Runs in CPU 1
-void setup() {
-    // Setup the Bluepad32 callbacks
-    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
-    //BP32.forgetBluetoothKeys();
+void SpinBackward(int INA, int INB, int PWM, int speed)
+{
+    digitalWrite(INA, LOW);
+    digitalWrite(INB, HIGH);
+    analogWrite(PWM, speed);
+}
 
-    ESP32PWM::allocateTimer(0);
-	ESP32PWM::allocateTimer(1);
-	ESP32PWM::allocateTimer(2);
-	ESP32PWM::allocateTimer(3);
-
-    pinMode(LED, OUTPUT);
-
-    Serial.begin(115200);
-    pinMode(IN1, OUTPUT);
-    pinMode(IN2, OUTPUT);
-    pinMode(ENA, OUTPUT);
-// QTR line sensor
-    
-    qtr.setTypeAnalog();
-    qtr.setSensorPins((const uint8_t[]){32, 33, 25, 26, 19, 18, 5, 17}, SensorCount);
-
-    //calibrate
-    SpinCalibrate(SensorCount);
-
-    // TODO: Write your setup code here
-    //Serial.print("Distance: ");
+void StopRotation(int INA, int INB)
+{
+    digitalWrite(INA, LOW);
+    digitalWrite(INB, LOW);
 }
 
 void SpinCalibrate(int SensorCount)
@@ -137,79 +127,42 @@ void SpinCalibrate(int SensorCount)
     digitalWrite(LED, LOW);
 }
 
-void SpinForward(int INA, int INB, int PWM, int speed)
-{
-    digitalWrite(INA, HIGH);
-    digitalWrite(INB, LOW);
-    analogWrite(PWM, speed);
-}
+// Arduino setup function. Runs in CPU 1
+void setup() {
+    // Setup the Bluepad32 callbacks
+    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
+    //BP32.forgetBluetoothKeys();
 
-void SpinBackward(int INA, int INB, int PWM, int speed)
-{
-    digitalWrite(INA, LOW);
-    digitalWrite(INB, HIGH);
-    analogWrite(PWM, speed);
-}
+    ESP32PWM::allocateTimer(0);
+	ESP32PWM::allocateTimer(1);
+	ESP32PWM::allocateTimer(2);
+	ESP32PWM::allocateTimer(3);
 
-void StopRotation(int INA, int INB)
-{
-    digitalWrite(INA, LOW);
-    digitalWrite(INB, LOW);
-}
+    pinMode(LED, OUTPUT);
 
-// Arduino loop function. Runs in CPU 1
-void loop() {
-
-    //QTR Sensor 
-    qtr.readLineBlack(sensorValues);
+    Serial.begin(115200);
+    pinMode(IN1, OUTPUT);
+    pinMode(IN2, OUTPUT);
+    pinMode(ENA, OUTPUT);
+// QTR line sensor
     
-    while(true)
-    {
-        if ( ((sensorValues[3] + sensorValues[4])/2) > ((threshold[3] + threshold[4])/2) )
-        {
-        Kp = 0.0006 * (1000 - analogRead(3));
-        Kd = 10 * Kp;
-        //Ki = 0.0001;
-        lineFollow();
-        }
+    qtr.setTypeAnalog();
+    qtr.setSensorPins((const uint8_t[]){32, 33, 25, 26, 19, 18, 5, 17}, SensorCount);
 
-        else if (sensorValues[0] > threshold[0] &&  sensorValues[7] < threshold[7])
-        {
-            lsp = 0; 
-            rsp = lfspeed;
-            StopRotation(IN1, IN2); //left
-            SpinForward(IN3, IN4, ENB, lfspeed); //right
-        }
-        else if (sensorValues[0] < threshold[0] &&  sensorValues[7] > threshold[7])
-        {
-            lsp = lfspeed; 
-            rsp = 0;
-            StopRotation(IN3, IN4); //right
-            SpinForward(IN1, IN2, ENA, lfspeed); //left
-        }
-    }
+    //calibrate
+    SpinCalibrate(SensorCount);
 
-    /*
-    for (int i=0; i < SensorCount; i++)
-    {
-        Serial.print(sensorValues[i]);
-        Serial.print('\t');
-    }
-    Serial.println();
-    */
-
-    delay(250);
-
-    vTaskDelay(1);
+    // TODO: Write your setup code here
+    //Serial.print("Distance: ");
 }
 
 void lineFollow()
 {
-    int error = (analogRead(2) - analogRead(5)); //error can be negative
+    error = (analogRead(2) - analogRead(5)); //error can be negative
 
-  P = error;
-  I = I + error;
-  D = error - previousError;
+P = error;
+I = I + error;
+D = error - previousError;
 
   PIDvalue = (Kp * P) + (Ki * I) + (Kd * D);
   previousError = error;
@@ -231,5 +184,49 @@ void lineFollow()
   }
 SpinForward(IN1, IN2, ENA, lsp); //left
 SpinForward(IN3, IN4, ENB, rsp); //right
-  motor2.drive(rsp);
+}
+
+// Arduino loop function. Runs in CPU 1
+void loop() {
+
+    //QTR Sensor 
+    qtr.readLineBlack(sensorValues);
+    
+    while(true)
+    {
+        if (sensorValues[0] > threshold[0] &&  sensorValues[7] < threshold[7])
+        {
+            lsp = 0; 
+            rsp = lfspeed;
+            StopRotation(IN1, IN2); //left
+            SpinForward(IN3, IN4, ENB, lfspeed); //right
+        }
+        else if (sensorValues[0] < threshold[0] &&  sensorValues[7] > threshold[7])
+        {
+            lsp = lfspeed; 
+            rsp = 0;
+            StopRotation(IN3, IN4); //right
+            SpinForward(IN1, IN2, ENA, lfspeed); //left
+        }
+        else if ( ((sensorValues[3] + sensorValues[4])/2) > ((threshold[3] + threshold[4])/2) )
+        {
+        Kp = 0.0006 * (1000 - analogRead(3));
+        Kd = 10 * Kp;
+        //Ki = 0.0001;
+        lineFollow();
+        }
+    }
+
+    /*
+    for (int i=0; i < SensorCount; i++)
+    {
+        Serial.print(sensorValues[i]);
+        Serial.print('\t');
+    }
+    Serial.println();
+    */
+
+    delay(250);
+
+    vTaskDelay(1);
 }

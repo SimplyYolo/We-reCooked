@@ -1,19 +1,3 @@
-/****************************************************************************
-Copyright 2021 Ricardo Quesada
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-****************************************************************************/
-
 #include "sdkconfig.h"
 #ifndef CONFIG_BLUEPAD32_PLATFORM_ARDUINO
 #error "Must only be compiled when using Bluepad32 Arduino platform"
@@ -36,17 +20,34 @@ GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 #define I2C_SCL 22
 #define I2C_FREQ 100000
 
-TwoWire I2C_0 = TwoWire(0);
-APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
-
 #define TIME_OUT 2500;
 QTRSensors qtr;
 
-const uint8_t SensorCount = 4;
+const uint8_t SensorCount = 6;
 uint16_t sensorValues[SensorCount];
 
-#define SensorPin 12
-ESP32SharpIR pig(ESP32SharpIR::GP2Y0A21YK0F, SensorPin);
+int P, D, I, previousError, PIDvalue, error;
+int lsp, rsp;
+int lfspeed = 200;
+
+float Kp = 0;
+float Kd = 0;
+float Ki = 0 ;
+
+int threshold[SensorCount]; 
+int Maximum[SensorCount];
+int Minimum[SensorCount];
+
+//Motor pins
+//left
+#define IN1  27  // Control pin 1
+#define IN2  14  // Control pin 2
+#define ENA  18  // PWM pin #1
+
+//right
+#define IN3  4  // Control pin 3
+#define IN4  2  // Control pin 4
+#define ENB  15  // PWM pin #2
 
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
@@ -71,156 +72,212 @@ void onDisconnectedGamepad(GamepadPtr gp) {
     }
 }
 
+void SpinForward(int INA, int INB, int PWM, int speed)
+{
+    digitalWrite(INA, HIGH);
+    digitalWrite(INB, LOW);
+    analogWrite(PWM, speed);
+}
+
+void SpinBackward(int INA, int INB, int PWM, int speed)
+{
+    digitalWrite(INA, LOW);
+    digitalWrite(INB, HIGH);
+    analogWrite(PWM, speed);
+}
+
+void StopRotation(int INA, int INB)
+{
+    digitalWrite(INA, LOW);
+    digitalWrite(INB, LOW);
+}
+
+void SpinCalibrate(int SensorCount)
+{
+    digitalWrite(LED, HIGH);
+    for (int i = 0; i < 400; i++)
+    {
+        SpinForward(IN1, IN2, ENA, 100); //spin left motor forward
+        SpinBackward(IN3, IN4, ENB, 100); //spin right motor backward
+        qtr.calibrate();
+        qtr.readLineBlack(sensorValues);
+        for (int j = 0; j < SensorCount; j++)
+        {
+            if (sensorValues[j] > Maximum[j])
+            {
+                Maximum[j] = sensorValues[j];   
+            }
+            if (sensorValues[j] < Minimum[j])
+            {
+                Minimum[j] = sensorValues[j];   
+            }
+        }
+        
+    }
+
+    // print values
+    for (uint8_t i = 0; i < SensorCount; i++)
+    {
+        Serial.print(Maximum[i]);
+        Serial.print(' ');
+    }
+    Serial.println();
+
+    for (uint8_t i = 0; i < SensorCount; i++)
+    {
+        Serial.print(Minimum[i]);
+        Serial.print(' ');
+    }
+    Serial.println();
+
+    //Threshold Calculations
+    for ( int i = 0; i < SensorCount; i++)
+    {
+    threshold[i] = (Minimum[i] + Maximum[i]) / 2;
+    Serial.print(threshold[i]);
+    Serial.print("   ");
+    }
+    StopRotation(IN1, IN2); //stop spin left motor 
+    StopRotation(IN3, IN4); // stop spin right motor 
+    digitalWrite(LED, LOW);
+    Serial.print("\n");
+}
 
 // Arduino setup function. Runs in CPU 1
 void setup() {
     // Setup the Bluepad32 callbacks
     //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
     //BP32.forgetBluetoothKeys();
+    
+    for (uint8_t i = 0; i < SensorCount; i++)
+    {
+        Maximum[i] = 0;
+        Minimum[i] = 4095;
+    }
 
-    ESP32PWM::allocateTimer(0);
-	ESP32PWM::allocateTimer(1);
-	ESP32PWM::allocateTimer(2);
-	ESP32PWM::allocateTimer(3);
+    //ESP32PWM::allocateTimer(0);
+	//ESP32PWM::allocateTimer(1);
+	//ESP32PWM::allocateTimer(2);
+	//ESP32PWM::allocateTimer(3);
 
     pinMode(LED, OUTPUT);
 
-//IRsensor
-    pig.setFilterRate(1.0f);
-
-// color sensor
-    I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
-    sensor.setInterruptPin(APDS9960_INT);
-    sensor.begin();
     Serial.begin(115200);
+    pinMode(IN1, OUTPUT);
+    pinMode(IN2, OUTPUT);
+    pinMode(ENA, OUTPUT);
+    pinMode(IN3, OUTPUT);
+    pinMode(IN4, OUTPUT);
+    pinMode(ENB, OUTPUT);
 // QTR line sensor
     
     qtr.setTypeAnalog();
-    qtr.setSensorPins((const uint8_t[]){33, 25, 32, 26}, SensorCount);
+    qtr.setSensorPins((const uint8_t[]){32, 25, 26, 33, 13, 12}, SensorCount);
 
     //calibrate
-    /*
-    digitalWrite(LED, HIGH);
-    for (int i = 0; i < 400; i++)
-    {
-        qtr.calibrate();
-    }
-
-    for (uint8_t i = 0; i < SensorCount; i++)
-    {
-        Serial.print(qtr.calibrationOn.minimum[i]);
-        Serial.print(' ');
-    }
-    Serial.println();
-
-    // print the calibration maximum values measured when emitters were on
-    for (uint8_t i = 0; i < SensorCount; i++)
-    {
-        Serial.print(qtr.calibrationOn.maximum[i]);
-        Serial.print(' ');
-    }
-    Serial.println();
-    Serial.println();
-    delay(1000);
-    digitalWrite(LED, LOW);
-    */
+    SpinCalibrate(SensorCount);
 
     // TODO: Write your setup code here
-    Serial.print("Distance: ");
+    //Serial.print("Distance: ");
+    for (int i = 0; i < SensorCount; i++)
+    {
+        Serial.print("Line ");
+        Serial.print(i);
+        Serial.print("\t");
+    }
 }
 
-void CheckDistance()
+void lineFollow()
 {
-    float Distance = pig.getDistanceFloat();
-    Serial.print(Distance);
-    //Serial.print("\n");
-    if (Distance < 5.0f)
+    error = (sensorValues[1] - sensorValues[4]); //error can be negative
+
+P = error;
+I = I + error;
+D = error - previousError;
+
+  PIDvalue = (Kp * P) + (Ki * I) + (Kd * D);
+  previousError = error;
+
+  lsp = lfspeed + PIDvalue;
+  rsp = lfspeed - PIDvalue;
+
+  if (lsp > 255) {
+    lsp = 255;
+  }
+  if (lsp < 0) {
+    lsp = 0;
+  }
+  if (rsp > 255) {
+    rsp = 255;
+  }
+  if (rsp < 0) {
+    rsp = 0;
+  }
+SpinForward(IN1, IN2, ENA, lsp); //left
+SpinForward(IN3, IN4, ENB, rsp); //right
+Serial.print("\n");
+Serial.print("Left speed");
+Serial.print("\t");
+Serial.print("Right speed");
+Serial.print("\n");
+Serial.print(lsp);
+Serial.print("\t");
+Serial.print(rsp);
+}
+
+void PrintLine()
+{
+    for (int i=0; i < SensorCount; i++)
     {
-        digitalWrite(LED, HIGH);
+        Serial.print(sensorValues[i]);
+        Serial.print('\t');
     }
-    else 
-    {
-        digitalWrite(LED, LOW);
-    }
+    Serial.print('\n');
+
 }
 
 // Arduino loop function. Runs in CPU 1
 void loop() {
-    //BP32.update();
-    /*
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        GamepadPtr myGamepad = myGamepads[i];
-        if (myGamepad && myGamepad->isConnected()) {
-            // TODO: Write your controller code here
-
-        }
-    }
-    */
-CheckDistance();
-
-//color sensor
-    /*
-    while(!sensor.colorAvailable())
-    {
-        delay(5);
-    }
-
-    int r, g, b, a;
-    sensor.readColor(r, g, b, a);
-
-    Serial.print("r = ");
-    Serial.print(r);
-    Serial.print("\n");
-    Serial.print("g = ");
-    Serial.print(g);
-    Serial.print("\n");
-    Serial.print("b = ");
-    Serial.print(b);
-    Serial.print("\n");
-
-    delay(5000);
-    */
 
     //QTR Sensor 
-    /*
     qtr.readLineBlack(sensorValues);
-    int i=0;
-    int line1= sensorValues[i=0];
-    int line2= sensorValues[i=1];
-    int line3= sensorValues[i=2]; 
-    int line4= sensorValues[i=3];
-
+    PrintLine();
     
+        if (sensorValues[0] > threshold[0] &&  sensorValues[5] < threshold[5])
+        {
+            lsp = 0; 
+            rsp = lfspeed;
+            StopRotation(IN1, IN2); //left
+            SpinForward(IN3, IN4, ENB, lfspeed); //right
+            Serial.print("Extreme left");
+        }
+        else if (sensorValues[0] < threshold[0] &&  sensorValues[5] > threshold[5])
+        {
+            lsp = lfspeed; 
+            rsp = 0;
+            StopRotation(IN3, IN4); //right
+            SpinForward(IN1, IN2, ENA, lfspeed); //left
+            Serial.print("Extreme right");
+        }
+        else if ( ((sensorValues[2] + sensorValues[3])/2) > ((threshold[2] + threshold[3])/2) )
+        {
+        Kp = 0.0006 * (1000 - ((sensorValues[2] + sensorValues[3])/2));
+        Kd = 10 * Kp;
+        //Ki = 0.0001;
+        lineFollow();
+        Serial.print("Forward");
+        }
+
+    /*
     for (int i=0; i < SensorCount; i++)
     {
         Serial.print(sensorValues[i]);
         Serial.print('\t');
     }
     Serial.println();
-    
-
-    Serial.print("Sensor 1: ");
-    Serial.print(line1);
-    Serial.print("\n");
-    Serial.print("Sensor 2: ");
-    Serial.print(line2);
-    Serial.print("\n");
-    Serial.print("Sensor 3: ");
-    Serial.print(line3);
-    Serial.print("\n");
-    Serial.print("Sensor 4: ");
-    Serial.print(line4);
-    Serial.print("\n");
     */
+
     delay(250);
-    
-
-    //digitalWrite(LED, HIGH);  // turn the LED on (HIGH is the voltage level)
-     //delay(5000);                      // wait for a second
-     //digitalWrite(LED, LOW);   // turn the LED off by making the voltage LOW
-    //delay(5000); 
-
-    // TODO: Write your periodic code here
 
     vTaskDelay(1);
 }
