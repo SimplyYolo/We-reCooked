@@ -23,7 +23,7 @@ GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 #define TIME_OUT 2500;
 QTRSensors qtr;
 
-const uint8_t SensorCount = 8;
+const uint8_t SensorCount = 6;
 uint16_t sensorValues[SensorCount];
 
 int P, D, I, previousError, PIDvalue, error;
@@ -34,13 +34,15 @@ float Kp = 0;
 float Kd = 0;
 float Ki = 0 ;
 
-int threshold[7];
+int threshold[SensorCount]; 
+int Maximum[SensorCount];
+int Minimum[SensorCount];
 
 //Motor pins
 //left
 #define IN1  27  // Control pin 1
 #define IN2  14  // Control pin 2
-#define ENA  12  // PWM pin #1
+#define ENA  18  // PWM pin #1
 
 //right
 #define IN3  4  // Control pin 3
@@ -93,38 +95,52 @@ void StopRotation(int INA, int INB)
 void SpinCalibrate(int SensorCount)
 {
     digitalWrite(LED, HIGH);
-    for (int i = 0; i < 3000; i++)
+    for (int i = 0; i < 400; i++)
     {
-        SpinForward(IN1, IN2, ENA, 50); //spin left motor forward
-        SpinBackward(IN3, IN4, ENB, 50); //spin right motor backward
+        SpinForward(IN1, IN2, ENA, 100); //spin left motor forward
+        SpinBackward(IN3, IN4, ENB, 100); //spin right motor backward
         qtr.calibrate();
+        qtr.readLineBlack(sensorValues);
+        for (int j = 0; j < SensorCount; j++)
+        {
+            if (sensorValues[j] > Maximum[j])
+            {
+                Maximum[j] = sensorValues[j];   
+            }
+            if (sensorValues[j] < Minimum[j])
+            {
+                Minimum[j] = sensorValues[j];   
+            }
+        }
+        
     }
 
     // print values
     for (uint8_t i = 0; i < SensorCount; i++)
     {
-        Serial.print(qtr.calibrationOn.minimum[i]);
+        Serial.print(Maximum[i]);
         Serial.print(' ');
     }
     Serial.println();
 
     for (uint8_t i = 0; i < SensorCount; i++)
     {
-        Serial.print(qtr.calibrationOn.maximum[i]);
+        Serial.print(Minimum[i]);
         Serial.print(' ');
     }
     Serial.println();
 
     //Threshold Calculations
-    for ( int i = 0; i < 7; i++)
+    for ( int i = 0; i < SensorCount; i++)
     {
-    threshold[i] = (qtr.calibrationOn.minimum[i] + qtr.calibrationOn.maximum[i]) / 2;
+    threshold[i] = (Minimum[i] + Maximum[i]) / 2;
     Serial.print(threshold[i]);
     Serial.print("   ");
     }
     StopRotation(IN1, IN2); //stop spin left motor 
     StopRotation(IN3, IN4); // stop spin right motor 
     digitalWrite(LED, LOW);
+    Serial.print("\n");
 }
 
 // Arduino setup function. Runs in CPU 1
@@ -132,11 +148,17 @@ void setup() {
     // Setup the Bluepad32 callbacks
     //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
     //BP32.forgetBluetoothKeys();
+    
+    for (uint8_t i = 0; i < SensorCount; i++)
+    {
+        Maximum[i] = 0;
+        Minimum[i] = 4095;
+    }
 
-    ESP32PWM::allocateTimer(0);
-	ESP32PWM::allocateTimer(1);
-	ESP32PWM::allocateTimer(2);
-	ESP32PWM::allocateTimer(3);
+    //ESP32PWM::allocateTimer(0);
+	//ESP32PWM::allocateTimer(1);
+	//ESP32PWM::allocateTimer(2);
+	//ESP32PWM::allocateTimer(3);
 
     pinMode(LED, OUTPUT);
 
@@ -144,21 +166,30 @@ void setup() {
     pinMode(IN1, OUTPUT);
     pinMode(IN2, OUTPUT);
     pinMode(ENA, OUTPUT);
+    pinMode(IN3, OUTPUT);
+    pinMode(IN4, OUTPUT);
+    pinMode(ENB, OUTPUT);
 // QTR line sensor
     
     qtr.setTypeAnalog();
-    qtr.setSensorPins((const uint8_t[]){32, 33, 25, 26, 19, 18, 5, 17}, SensorCount);
+    qtr.setSensorPins((const uint8_t[]){32, 25, 26, 33, 13, 12}, SensorCount);
 
     //calibrate
     SpinCalibrate(SensorCount);
 
     // TODO: Write your setup code here
     //Serial.print("Distance: ");
+    for (int i = 0; i < SensorCount; i++)
+    {
+        Serial.print("Line ");
+        Serial.print(i);
+        Serial.print("\t");
+    }
 }
 
 void lineFollow()
 {
-    error = (analogRead(2) - analogRead(5)); //error can be negative
+    error = (sensorValues[1] - sensorValues[4]); //error can be negative
 
 P = error;
 I = I + error;
@@ -167,8 +198,8 @@ D = error - previousError;
   PIDvalue = (Kp * P) + (Ki * I) + (Kd * D);
   previousError = error;
 
-  lsp = lfspeed - PIDvalue;
-  rsp = lfspeed + PIDvalue;
+  lsp = lfspeed + PIDvalue;
+  rsp = lfspeed - PIDvalue;
 
   if (lsp > 255) {
     lsp = 255;
@@ -184,6 +215,25 @@ D = error - previousError;
   }
 SpinForward(IN1, IN2, ENA, lsp); //left
 SpinForward(IN3, IN4, ENB, rsp); //right
+Serial.print("\n");
+Serial.print("Left speed");
+Serial.print("\t");
+Serial.print("Right speed");
+Serial.print("\n");
+Serial.print(lsp);
+Serial.print("\t");
+Serial.print(rsp);
+}
+
+void PrintLine()
+{
+    for (int i=0; i < SensorCount; i++)
+    {
+        Serial.print(sensorValues[i]);
+        Serial.print('\t');
+    }
+    Serial.print('\n');
+
 }
 
 // Arduino loop function. Runs in CPU 1
@@ -191,31 +241,32 @@ void loop() {
 
     //QTR Sensor 
     qtr.readLineBlack(sensorValues);
+    PrintLine();
     
-    while(true)
-    {
-        if (sensorValues[0] > threshold[0] &&  sensorValues[7] < threshold[7])
+        if (sensorValues[0] > threshold[0] &&  sensorValues[5] < threshold[5])
         {
             lsp = 0; 
             rsp = lfspeed;
             StopRotation(IN1, IN2); //left
             SpinForward(IN3, IN4, ENB, lfspeed); //right
+            Serial.print("Extreme left");
         }
-        else if (sensorValues[0] < threshold[0] &&  sensorValues[7] > threshold[7])
+        else if (sensorValues[0] < threshold[0] &&  sensorValues[5] > threshold[5])
         {
             lsp = lfspeed; 
             rsp = 0;
             StopRotation(IN3, IN4); //right
             SpinForward(IN1, IN2, ENA, lfspeed); //left
+            Serial.print("Extreme right");
         }
-        else if ( ((sensorValues[3] + sensorValues[4])/2) > ((threshold[3] + threshold[4])/2) )
+        else if ( ((sensorValues[2] + sensorValues[3])/2) > ((threshold[2] + threshold[3])/2) )
         {
-        Kp = 0.0006 * (1000 - analogRead(3));
+        Kp = 0.0006 * (1000 - ((sensorValues[2] + sensorValues[3])/2));
         Kd = 10 * Kp;
         //Ki = 0.0001;
         lineFollow();
+        Serial.print("Forward");
         }
-    }
 
     /*
     for (int i=0; i < SensorCount; i++)

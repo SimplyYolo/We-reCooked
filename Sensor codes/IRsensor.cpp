@@ -39,29 +39,33 @@ GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 TwoWire I2C_0 = TwoWire(0);
 APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 
+int lsp, rsp;
+int lfspeed = 200;
+
 #define TIME_OUT 2500;
 
 //IRsensor
-#define LeftPin 23
+#define LeftPin 15
 ESP32SharpIR left(ESP32SharpIR::GP2Y0A21YK0F, LeftPin);
 
-#define RightPin 1
+#define RightPin 2
 ESP32SharpIR right(ESP32SharpIR::GP2Y0A21YK0F, RightPin);
 
-#define FrontPin 3
+#define FrontPin 4
 ESP32SharpIR front(ESP32SharpIR::GP2Y0A21YK0F, FrontPin);
 
 //Motor pins
 //left
-#define IN1  27  // Control pin 1
-#define IN2  14  // Control pin 2
+#define IN1  19  // Control pin 1
+#define IN2  5  // Control pin 2
 #define ENA  18  // PWM pin #1
 
 //right
-#define IN3  4  // Control pin 3
-#define IN4  2  // Control pin 4
-#define ENB  15  // PWM pin #2
+#define IN3  3  // Control pin 3
+#define IN4  1  // Control pin 4
+#define ENB  23  // PWM pin #2
 
+float DistThreshold = 10;
 
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
@@ -86,13 +90,57 @@ void onDisconnectedGamepad(GamepadPtr gp) {
     }
 }
 
+//use function to control wheel mode and speed
+void SpinForward(int INA, int INB, int PWM, int speed)
+{
+    digitalWrite(INA, HIGH);
+    digitalWrite(INB, LOW);
+    analogWrite(PWM, speed);
+}
+
+void SpinBackward(int INA, int INB, int PWM, int speed)
+{
+    digitalWrite(INA, LOW);
+    digitalWrite(INB, HIGH);
+    analogWrite(PWM, speed);
+}
+
+void StopRotation(int INA, int INB)
+{
+    digitalWrite(INA, LOW);
+    digitalWrite(INB, LOW);
+}
+
+void MoveForward()
+{
+    SpinForward(IN1, IN2, ENA, lfspeed);
+    SpinForward(IN3, IN4, ENB, lfspeed);
+}
+
+void stop()
+{
+    StopRotation(IN1, IN2);
+    StopRotation(IN3, IN4);
+}
+
+void rotateLeft()
+{
+    StopRotation(IN1, IN2); //left
+    SpinForward(IN3, IN4, ENB, lfspeed); //right
+}
+
+void rotateRight()
+{
+    StopRotation(IN3, IN4); //right
+    SpinForward(IN1, IN2, ENA, lfspeed); //left
+}
 
 // Arduino setup function. Runs in CPU 1
 void setup() {
     // Setup the Bluepad32 callbacks
     //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
     //BP32.forgetBluetoothKeys();
-
+    Serial.begin(115200);
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
 	ESP32PWM::allocateTimer(2);
@@ -124,6 +172,38 @@ void loop() {
     float leftDist = left.getDistanceFloat();
     float rightDist = right.getDistanceFloat();
 
+    Serial.print("front distance: ");
+    Serial.print(frontDist);
+    Serial.print("\n");
+    Serial.print("left distance: ");
+    Serial.print(leftDist);
+    Serial.print("\n");
+    Serial.print("right distance: ");
+    Serial.print(rightDist);
+    Serial.print("\n");
+
+    /*
+    if (frontDist > DistThreshold)
+    {
+        MoveForward();
+    }
+    else if (leftDist < rightDist)
+    {
+        stop();
+        while (frontDist <= DistThreshold)
+        {
+            rotateRight();
+        }
+    }
+    else if (leftDist > rightDist)
+    {
+        stop();
+        while (frontDist <= DistThreshold)
+        {
+            rotateLeft();
+        }
+    }
+    */
     
 
     delay(500);
@@ -131,23 +211,4 @@ void loop() {
     vTaskDelay(1);
 }
 
-//use function to control wheel mode and speed
-void SpinForward(int INA, int INB, int PWM, int speed)
-{
-    digitalWrite(INA, HIGH);
-    digitalWrite(INB, LOW);
-    analogWrite(PWM, speed);
-}
 
-void SpinBackward(int INA, int INB, int PWM, int speed)
-{
-    digitalWrite(INA, LOW);
-    digitalWrite(INB, HIGH);
-    analogWrite(PWM, speed);
-}
-
-void StopRotation(int INA, int INB)
-{
-    digitalWrite(INA, LOW);
-    digitalWrite(INB, LOW);
-}

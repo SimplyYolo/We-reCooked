@@ -1,3 +1,19 @@
+/****************************************************************************
+Copyright 2021 Ricardo Quesada
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+****************************************************************************/
+
 #include "sdkconfig.h"
 #ifndef CONFIG_BLUEPAD32_PLATFORM_ARDUINO
 #error "Must only be compiled when using Bluepad32 Arduino platform"
@@ -20,35 +36,33 @@ GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 #define I2C_SCL 22
 #define I2C_FREQ 100000
 
+TwoWire I2C_0 = TwoWire(0);
+APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
+
+Servo myServo;
+#define servoPin 14
+
+
 #define TIME_OUT 2500;
-QTRSensors qtr;
 
-const uint8_t SensorCount = 6;
-uint16_t sensorValues[SensorCount];
-
-int P, D, I, previousError, PIDvalue, error;
-int lsp, rsp;
-int lfspeed = 200;
-
-float Kp = 0;
-float Kd = 0;
-float Ki = 0 ;
-
-int threshold[SensorCount]; 
-int Maximum[SensorCount];
-int Minimum[SensorCount];
+//IRsensor
+#define SensorPin 12
 
 //Motor pins
 //left
-#define IN1  27  // Control pin 1
-#define IN2  14  // Control pin 2
+#define IN1  19  // Control pin 1
+#define IN2  5  // Control pin 2
 #define ENA  18  // PWM pin #1
 
 //right
-#define IN3  4  // Control pin 3
-#define IN4  2  // Control pin 4
-#define ENB  15  // PWM pin #2
+#define IN3  3  // Control pin 3
+#define IN4  1  // Control pin 4
+#define ENB  23  // PWM pin #2
 
+//Color sensor variables
+float RGB[3];
+
+int servoPWM = 1500;
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
     bool foundEmptySlot = false;
@@ -72,6 +86,7 @@ void onDisconnectedGamepad(GamepadPtr gp) {
     }
 }
 
+//use function to control wheel mode and speed
 void SpinForward(int INA, int INB, int PWM, int speed)
 {
     digitalWrite(INA, HIGH);
@@ -92,55 +107,30 @@ void StopRotation(int INA, int INB)
     digitalWrite(INB, LOW);
 }
 
-void SpinCalibrate(int SensorCount)
+void RememberColor()
 {
-    digitalWrite(LED, HIGH);
-    for (int i = 0; i < 400; i++)
-    {
-        SpinForward(IN1, IN2, ENA, 100); //spin left motor forward
-        SpinBackward(IN3, IN4, ENB, 100); //spin right motor backward
-        qtr.calibrate();
-        qtr.readLineBlack(sensorValues);
-        for (int j = 0; j < SensorCount; j++)
-        {
-            if (sensorValues[j] > Maximum[j])
-            {
-                Maximum[j] = sensorValues[j];   
-            }
-            if (sensorValues[j] < Minimum[j])
-            {
-                Minimum[j] = sensorValues[j];   
-            }
-        }
-        
-    }
-
-    // print values
-    for (uint8_t i = 0; i < SensorCount; i++)
-    {
-        Serial.print(Maximum[i]);
-        Serial.print(' ');
-    }
-    Serial.println();
-
-    for (uint8_t i = 0; i < SensorCount; i++)
-    {
-        Serial.print(Minimum[i]);
-        Serial.print(' ');
-    }
-    Serial.println();
-
-    //Threshold Calculations
-    for ( int i = 0; i < SensorCount; i++)
-    {
-    threshold[i] = (Minimum[i] + Maximum[i]) / 2;
-    Serial.print(threshold[i]);
-    Serial.print("   ");
-    }
+    
+    // modify to better remember color on inital pick    
+    int r, g, b, a;
+    float Rtotal =0, Gtotal =0, Btotal=0;
     StopRotation(IN1, IN2); //stop spin left motor 
     StopRotation(IN3, IN4); // stop spin right motor 
-    digitalWrite(LED, LOW);
-    Serial.print("\n");
+
+    for (int i = 0; i < 400; i++)
+    {
+        sensor.readColor(r, g, b, a);
+        Rtotal += r; 
+        Gtotal += g; 
+        Btotal += b; 
+        
+    }
+    RGB[0] = Rtotal/400;
+    RGB[1] = Gtotal/400;
+    RGB[2] = Btotal/400;
+
+    Serial.print(RGB[0]);
+    Serial.print(RGB[1]);
+    Serial.print(RGB[2]);
 }
 
 // Arduino setup function. Runs in CPU 1
@@ -148,136 +138,82 @@ void setup() {
     // Setup the Bluepad32 callbacks
     //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
     //BP32.forgetBluetoothKeys();
-    
-    for (uint8_t i = 0; i < SensorCount; i++)
-    {
-        Maximum[i] = 0;
-        Minimum[i] = 4095;
-    }
 
-    //ESP32PWM::allocateTimer(0);
-	//ESP32PWM::allocateTimer(1);
-	//ESP32PWM::allocateTimer(2);
-	//ESP32PWM::allocateTimer(3);
+    ESP32PWM::allocateTimer(0);
+	ESP32PWM::allocateTimer(1);
+	ESP32PWM::allocateTimer(2);
+	ESP32PWM::allocateTimer(3);
 
     pinMode(LED, OUTPUT);
 
+// color sensor
+    I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
+    sensor.setInterruptPin(APDS9960_INT);
+    sensor.begin();
     Serial.begin(115200);
-    pinMode(IN1, OUTPUT);
-    pinMode(IN2, OUTPUT);
-    pinMode(ENA, OUTPUT);
-    pinMode(IN3, OUTPUT);
-    pinMode(IN4, OUTPUT);
-    pinMode(ENB, OUTPUT);
-// QTR line sensor
-    
-    qtr.setTypeAnalog();
-    qtr.setSensorPins((const uint8_t[]){32, 25, 26, 33, 13, 12}, SensorCount);
 
-    //calibrate
-    SpinCalibrate(SensorCount);
-
-    // TODO: Write your setup code here
-    //Serial.print("Distance: ");
-    for (int i = 0; i < SensorCount; i++)
+    while(!sensor.colorAvailable())
     {
-        Serial.print("Line ");
-        Serial.print(i);
-        Serial.print("\t");
+        delay(5);
     }
-}
 
-void lineFollow()
-{
-    error = (sensorValues[1] - sensorValues[4]); //error can be negative
-
-P = error;
-I = I + error;
-D = error - previousError;
-
-  PIDvalue = (Kp * P) + (Ki * I) + (Kd * D);
-  previousError = error;
-
-  lsp = lfspeed + PIDvalue;
-  rsp = lfspeed - PIDvalue;
-
-  if (lsp > 255) {
-    lsp = 255;
-  }
-  if (lsp < 0) {
-    lsp = 0;
-  }
-  if (rsp > 255) {
-    rsp = 255;
-  }
-  if (rsp < 0) {
-    rsp = 0;
-  }
-SpinForward(IN1, IN2, ENA, lsp); //left
-SpinForward(IN3, IN4, ENB, rsp); //right
-Serial.print("\n");
-Serial.print("Left speed");
-Serial.print("\t");
-Serial.print("Right speed");
-Serial.print("\n");
-Serial.print(lsp);
-Serial.print("\t");
-Serial.print(rsp);
-}
-
-void PrintLine()
-{
-    for (int i=0; i < SensorCount; i++)
-    {
-        Serial.print(sensorValues[i]);
-        Serial.print('\t');
-    }
-    Serial.print('\n');
-
+    RememberColor();
+    myServo.attach(servoPin);
 }
 
 // Arduino loop function. Runs in CPU 1
 void loop() {
-
-    //QTR Sensor 
-    qtr.readLineBlack(sensorValues);
-    PrintLine();
-    
-        if (sensorValues[0] > threshold[0] &&  sensorValues[5] < threshold[5])
-        {
-            lsp = 0; 
-            rsp = lfspeed;
-            StopRotation(IN1, IN2); //left
-            SpinForward(IN3, IN4, ENB, lfspeed); //right
-            Serial.print("Extreme left");
-        }
-        else if (sensorValues[0] < threshold[0] &&  sensorValues[5] > threshold[5])
-        {
-            lsp = lfspeed; 
-            rsp = 0;
-            StopRotation(IN3, IN4); //right
-            SpinForward(IN1, IN2, ENA, lfspeed); //left
-            Serial.print("Extreme right");
-        }
-        else if ( ((sensorValues[2] + sensorValues[3])/2) > ((threshold[2] + threshold[3])/2) )
-        {
-        Kp = 0.0006 * (1000 - ((sensorValues[2] + sensorValues[3])/2));
-        Kd = 10 * Kp;
-        //Ki = 0.0001;
-        lineFollow();
-        Serial.print("Forward");
-        }
-
+    //BP32.update();
     /*
-    for (int i=0; i < SensorCount; i++)
-    {
-        Serial.print(sensorValues[i]);
-        Serial.print('\t');
+    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+        GamepadPtr myGamepad = myGamepads[i];
+        if (myGamepad && myGamepad->isConnected()) {
+            // TODO: Write your controller code here
+
+        }
     }
-    Serial.println();
     */
 
-    delay(250);
+//color sensor
+
+    //try to make the rotate until it detects the right color
+    // in which then it moves forward
+    while(!sensor.colorAvailable())
+    {
+        delay(5);
+    }
+    int r, g, b, a;
+
+
+    SpinForward(IN1, IN2, ENA, 90);
+    SpinForward(IN3, IN4, ENB, 90);
+    sensor.readColor(r, g, b, a);
+
+    Serial.print("r = ");
+    Serial.print(r);
+    Serial.print("\n");
+    Serial.print("g = ");
+    Serial.print(g);
+    Serial.print("\n");
+    Serial.print("b = ");
+    Serial.print(b);
+    Serial.print("\n");
+
+    
+    if (abs(RGB[0]-r) < 2 && abs(RGB[1]-g) < 2, abs(RGB[2]-b) < 2 )
+    {
+        StopRotation(IN1, IN2); //stop spin left motor 
+        StopRotation(IN3, IN4); // stop spin right motor
+        Serial.print("matched");
+        Serial.print("\n");
+        myServo.write(1750);
+    }
+    else 
+    {
+        myServo.write(1500);
+    }
+    delay(500);
 
     vTaskDelay(1);
 }
+

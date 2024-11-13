@@ -39,27 +39,28 @@ GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
 TwoWire I2C_0 = TwoWire(0);
 APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 
+Servo myServo;
+#define servoPin 14
+
+
 #define TIME_OUT 2500;
 
 //IRsensor
 #define SensorPin 12
-ESP32SharpIR pig(ESP32SharpIR::GP2Y0A21YK0F, SensorPin);
 
 //Motor pins
 //left
-#define IN1  27  // Control pin 1
-#define IN2  14  // Control pin 2
+#define IN1  19  // Control pin 1
+#define IN2  5  // Control pin 2
 #define ENA  18  // PWM pin #1
 
 //right
-#define IN3  4  // Control pin 3
-#define IN4  2  // Control pin 4
-#define ENB  15  // PWM pin #2
+#define IN3  3  // Control pin 3
+#define IN4  1  // Control pin 4
+#define ENB  23  // PWM pin #2
 
 //Color sensor variables
-int rMax, bMax,gMax;
-int rMin, bMin,gMin;
-int RGB[3];
+float RGB[3];
 
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
@@ -84,112 +85,6 @@ void onDisconnectedGamepad(GamepadPtr gp) {
     }
 }
 
-
-// Arduino setup function. Runs in CPU 1
-void setup() {
-    // Setup the Bluepad32 callbacks
-    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
-    //BP32.forgetBluetoothKeys();
-
-    ESP32PWM::allocateTimer(0);
-	ESP32PWM::allocateTimer(1);
-	ESP32PWM::allocateTimer(2);
-	ESP32PWM::allocateTimer(3);
-
-    pinMode(LED, OUTPUT);
-
-//IRsensor
-    pig.setFilterRate(1.0f);
-
-// color sensor
-    I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
-    sensor.setInterruptPin(APDS9960_INT);
-    sensor.begin();
-    Serial.begin(115200);
-
-    while(!sensor.colorAvailable())
-    {
-        delay(5);
-    }
-
-    RememberColor();
-
-}
-
-// ignore stuff with IR sensor
-void CheckDistance()
-{
-    float Distance = pig.getDistanceFloat();
-    Serial.print(Distance);
-    //Serial.print("\n");
-    if (Distance < 5.0f)
-    {
-        digitalWrite(LED, HIGH);
-    }
-    else 
-    {
-        digitalWrite(LED, LOW);
-    }
-}
-
-void RememberColor()
-{
-    // modify to better remember color on inital pick
-    int r, g, b, a;
-
-    /*
-    sensor.readColor(r, g, b, a);
-    rMax = r;
-    gMax = g;
-    bMax = b;
-    rMin = r;
-    gMin = g;
-    bMin = b;
-    */
-
-    sensor.readColor(r, g, b, a);
-
-    RGB[1] = r;
-    RGB[2] = g;
-    RGB[3] = b;
-}
-
-// Arduino loop function. Runs in CPU 1
-void loop() {
-    //BP32.update();
-    /*
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        GamepadPtr myGamepad = myGamepads[i];
-        if (myGamepad && myGamepad->isConnected()) {
-            // TODO: Write your controller code here
-
-        }
-    }
-    */
-
-//color sensor
-
-    //try to make the rotate until it detects the right color
-    // in which then it moves forward
-
-    int r, g, b, a;
-    sensor.readColor(r, g, b, a);
-
-    Serial.print("r = ");
-    Serial.print(r);
-    Serial.print("\n");
-    Serial.print("g = ");
-    Serial.print(g);
-    Serial.print("\n");
-    Serial.print("b = ");
-    Serial.print(b);
-    Serial.print("\n");
-
-    delay(5000);
-
-    vTaskDelay(1);
-}
-
 //use function to control wheel mode and speed
 void SpinForward(int INA, int INB, int PWM, int speed)
 {
@@ -210,3 +105,110 @@ void StopRotation(int INA, int INB)
     digitalWrite(INA, LOW);
     digitalWrite(INB, LOW);
 }
+
+void RememberColor()
+{
+    
+    // modify to better remember color on inital pick    
+    int r, g, b, a;
+    float Rtotal =0, Gtotal =0, Btotal=0;
+    StopRotation(IN1, IN2); //stop spin left motor 
+    StopRotation(IN3, IN4); // stop spin right motor 
+
+    for (int i = 0; i < 400; i++)
+    {
+        sensor.readColor(r, g, b, a);
+        Rtotal += r; 
+        Gtotal += g; 
+        Btotal += b; 
+        
+    }
+    RGB[0] = Rtotal/400;
+    RGB[1] = Gtotal/400;
+    RGB[2] = Btotal/400;
+
+    Serial.print(RGB[0]);
+    Serial.print(RGB[1]);
+    Serial.print(RGB[2]);
+}
+
+// Arduino setup function. Runs in CPU 1
+void setup() {
+    // Setup the Bluepad32 callbacks
+    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
+    //BP32.forgetBluetoothKeys();
+
+    ESP32PWM::allocateTimer(0);
+	ESP32PWM::allocateTimer(1);
+	ESP32PWM::allocateTimer(2);
+	ESP32PWM::allocateTimer(3);
+
+    pinMode(LED, OUTPUT);
+
+// color sensor
+    I2C_0.begin(I2C_SDA, I2C_SCL, I2C_FREQ);
+    sensor.setInterruptPin(APDS9960_INT);
+    sensor.begin();
+    Serial.begin(115200);
+
+    while(!sensor.colorAvailable())
+    {
+        delay(5);
+    }
+
+    RememberColor();
+    myServo.attach(servoPin);
+}
+
+// Arduino loop function. Runs in CPU 1
+void loop() {
+    //BP32.update();
+    /*
+    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+        GamepadPtr myGamepad = myGamepads[i];
+        if (myGamepad && myGamepad->isConnected()) {
+            // TODO: Write your controller code here
+
+        }
+    }
+    */
+
+//color sensor
+
+    //try to make the rotate until it detects the right color
+    // in which then it moves forward
+    while(!sensor.colorAvailable())
+    {
+        delay(5);
+    }
+    int r, g, b, a;
+
+
+    SpinForward(IN1, IN2, ENA, 90);
+    SpinForward(IN3, IN4, ENB, 90);
+    sensor.readColor(r, g, b, a);
+
+    Serial.print("r = ");
+    Serial.print(r);
+    Serial.print("\n");
+    Serial.print("g = ");
+    Serial.print(g);
+    Serial.print("\n");
+    Serial.print("b = ");
+    Serial.print(b);
+    Serial.print("\n");
+
+    
+    if (abs(RGB[0]-r) < 2 && abs(RGB[1]-g) < 2, abs(RGB[2]-b) < 2 )
+    {
+        StopRotation(IN1, IN2); //stop spin left motor 
+        StopRotation(IN3, IN4); // stop spin right motor
+        Serial.print("matched");
+        Serial.print("\n");
+        myServo.write(1750);
+    }
+    delay(500);
+
+    vTaskDelay(1);
+}
+
