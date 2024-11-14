@@ -182,7 +182,7 @@ void loop() {
     Serial.print(rightDist);
     Serial.print("\n");
 
-    /*
+    
     if (frontDist > DistThreshold)
     {
         MoveForward();
@@ -203,7 +203,7 @@ void loop() {
             rotateLeft();
         }
     }
-    */
+    
     
 
     delay(500);

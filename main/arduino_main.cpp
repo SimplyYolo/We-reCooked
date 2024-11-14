@@ -40,7 +40,7 @@ TwoWire I2C_0 = TwoWire(0);
 APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 
 Servo myServo;
-#define servoPin 14
+#define servoPin 15
 
 
 #define TIME_OUT 2500;
@@ -200,7 +200,7 @@ void loop() {
     Serial.print("\n");
 
     
-    if (abs(RGB[0]-r) < 2 && abs(RGB[1]-g) < 2, abs(RGB[2]-b) < 2 )
+    if (abs(RGB[0]-r) < 2 && abs(RGB[1]-g) < 2 && abs(RGB[2]-b) < 2 )
     {
         StopRotation(IN1, IN2); //stop spin left motor 
         StopRotation(IN3, IN4); // stop spin right motor
@@ -208,7 +208,7 @@ void loop() {
         Serial.print("\n");
         myServo.write(1750);
     }
-    else 
+    else
     {
         myServo.write(1500);
     }
