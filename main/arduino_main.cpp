@@ -17,7 +17,8 @@ limitations under the License.
 #include "sdkconfig.h"
 #ifndef CONFIG_BLUEPAD32_PLATFORM_ARDUINO
 #error "Must only be compiled when using Bluepad32 Arduino platform"
-#endif  // !CONFIG_BLUEPAD32_PLATFORM_ARDUINO
+#endif  !CONFIG_BLUEPAD32_PLATFORM_ARDUINO
+#include <bits/stdc++.h>
 
 #include <Arduino.h>
 #include <Bluepad32.h>
@@ -135,9 +136,9 @@ void RememberColor()
 
 // Arduino setup function. Runs in CPU 1
 void setup() {
-    // Setup the Bluepad32 callbacks
-    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
-    //BP32.forgetBluetoothKeys();
+    //Setup the Bluepad32 callbacks
+    BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
+    BP32.forgetBluetoothKeys();
 
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
@@ -163,16 +164,42 @@ void setup() {
 
 // Arduino loop function. Runs in CPU 1
 void loop() {
-    //BP32.update();
-    /*
+   BP32.update();
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        GamepadPtr myGamepad = myGamepads[i];
-        if (myGamepad && myGamepad->isConnected()) {
-            // TODO: Write your controller code here
+        GamepadPtr controller = myGamepads[i];
+        if (controller && controller->isConnected()) {
+           
+            if (controller->l1() == 1) {
+                Serial.println("Servo move");
+                myServo.write(1000);
+            }
+            else {
+                Serial.println("Servo stop");
+                myServo.write(1500);
+            }
+
+
+            if(controller->axisRY() > 0) { // negative y is upward on stick
+                Serial.println(" DC motor move");
+                digitalWrite(IN1, LOW);
+                digitalWrite(IN2, HIGH);
+            }
+            if(controller->axisRY() == 0) { // stop motor 1
+                Serial.println(" DC motor stop");
+                digitalWrite(IN1, LOW);
+                digitalWrite(IN2, LOW);
+            }
+
+
+            // PHYSICAL BUTTON A
+            if (controller->b()) {
+                Serial.println("button a pressed");
+            }
+
 
         }
+        vTaskDelay(1);
     }
-    */
 
 //color sensor
 
@@ -216,4 +243,3 @@ void loop() {
 
     vTaskDelay(1);
 }
-
