@@ -140,6 +140,13 @@ void setup() {
     BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
     BP32.forgetBluetoothKeys();
 
+    pinMode(IN1, OUTPUT);
+     pinMode(IN2, OUTPUT);
+     pinMode(ENA, OUTPUT);
+      pinMode(IN3, OUTPUT);
+     pinMode(IN4, OUTPUT);
+     pinMode(ENB, OUTPUT);
+
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
 	ESP32PWM::allocateTimer(2);
@@ -165,7 +172,7 @@ bool checkAuto = true;
 // Arduino loop function. Runs in CPU 1
 void loop() {
     
-    if(checkAuto){
+    if(!checkAuto){
         
             //color sensor
 
@@ -209,7 +216,7 @@ void loop() {
 
     vTaskDelay(500);
     }
-    if (!checkAuto){
+    if (checkAuto){
          BP32.update();
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
         GamepadPtr controller = myGamepads[i];
@@ -218,11 +225,33 @@ void loop() {
             double leftX = controller->axisX(); // [-512,512] might give error or not work properly if axisX 
             double leftY = -controller->axisY(); // [-512,512]
             int MAX_WHEEL_SPEED = 200;
-            int leftWheelSpeed = (leftY / 512.00) * MAX_WHEEL_SPEED;
-            int rightWheelSpeed = (leftY / 512.00) * MAX_WHEEL_SPEED;
+            //int leftWheelSpeed = (leftY / 512.00) * MAX_WHEEL_SPEED;
+            //int rightWheelSpeed = (leftY / 512.00) * MAX_WHEEL_SPEED;
+            if(leftY >= 250){
+                int leftWheelSpeed = 255;
+                int rightWheelSpeed = 255;
+                SpinForward(IN1, IN2, ENA, leftWheelSpeed);
+                SpinForward(IN3, IN4, ENB, rightWheelSpeed);
+            }
+            /* 
+            if(controller->l1() == 1){
+             myServo.write(1600);
+            }
+            if(controller->l1() == 0){
+                myServo.write(1500);
+            }
+            if(controller->r1() == 1){
+                myServo.write(700);
+            }
+            if(controller->r1() == 0){
+                myServo.write(1500);
+            }
+             if(controller->r2() == 1){
+             
+            }
             // make code more efficient by combining both statements and combining moving forwards and backwards
-            if (leftX > 0) { // x joystick value greater than 0 (rightside)
-                rightWheelSpeed -= (leftX / 512.00) * MAX_WHEEL_SPEED;
+            if (leftX < 0) { // x joystick value greater than 0 (rightside)
+               rightWheelSpeed -= (leftX / 512.00) * MAX_WHEEL_SPEED;
                 //Serial.println(controller->axisRX());
                 if (leftY >= 0) {
                     SpinForward(IN1, IN2, ENA, abs(leftWheelSpeed));
@@ -231,34 +260,41 @@ void loop() {
                     SpinBackward(IN1, IN2, ENA, abs(leftWheelSpeed));
                     SpinBackward(IN3, IN4, ENB, abs(rightWheelSpeed));
                 }
-            } else if (leftX < 0) { // x joystick value less than 0 (leftside)
+            } else if (leftX > 0) { // x joystick value less than 0 (leftside)
                 leftWheelSpeed -= (leftX / 512.00) * MAX_WHEEL_SPEED;
                 //Serial.println(controller->axisRX());
                 if (leftY >= 0) {
                     SpinForward(IN1, IN2, ENA, abs(leftWheelSpeed));
                     SpinForward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
                 } else if (leftY < 0) {
                     SpinBackward(IN1, IN2, ENA, abs(leftWheelSpeed));
                     SpinBackward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
                 }
             } else {
                 if (leftY > 0) {
                     SpinForward(IN1, IN2, ENA, abs(leftWheelSpeed));
                     SpinForward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
                 } else if (leftY <= 0) {
                     SpinBackward(IN1, IN2, ENA, abs(leftWheelSpeed));
                     SpinBackward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
                 }
             }
-            
-            Serial.println(leftX);
-            Serial.println(leftY);
+            //Serial.println(leftX);
+            //Serial.println(leftY);
             //if(controller->axisRX() == 0) { // stop motor 1
                 //Serial.println(controller->axisRX());
                 // StopRotation(IN1, IN2); //stop spin left motor 
                 // StopRotation(IN3, IN4); // stop spin right motor 
             //}
-
+            */
         }
     }
  }
