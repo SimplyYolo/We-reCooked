@@ -17,7 +17,8 @@ limitations under the License.
 #include "sdkconfig.h"
 #ifndef CONFIG_BLUEPAD32_PLATFORM_ARDUINO
 #error "Must only be compiled when using Bluepad32 Arduino platform"
-#endif  // !CONFIG_BLUEPAD32_PLATFORM_ARDUINO
+#endif  !CONFIG_BLUEPAD32_PLATFORM_ARDUINO
+#include <bits/stdc++.h>
 
 #include <Arduino.h>
 #include <Bluepad32.h>
@@ -40,7 +41,7 @@ TwoWire I2C_0 = TwoWire(0);
 APDS9960 sensor = APDS9960(I2C_0, APDS9960_INT);
 
 Servo myServo;
-#define servoPin 14
+#define servoPin 15
 
 
 #define TIME_OUT 2500;
@@ -55,13 +56,14 @@ Servo myServo;
 #define ENA  18  // PWM pin #1
 
 //right
-#define IN3  3  // Control pin 3
-#define IN4  1  // Control pin 4
+#define IN3  16  // Control pin 3
+#define IN4  17  // Control pin 4
 #define ENB  23  // PWM pin #2
 
 //Color sensor variables
 float RGB[3];
 
+int servoPWM = 1500;
 // This callback gets called any time a new gamepad is connected.
 void onConnectedGamepad(GamepadPtr gp) {
     bool foundEmptySlot = false;
@@ -134,9 +136,16 @@ void RememberColor()
 
 // Arduino setup function. Runs in CPU 1
 void setup() {
-    // Setup the Bluepad32 callbacks
-    //BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
-    //BP32.forgetBluetoothKeys();
+    //Setup the Bluepad32 callbacks
+    BP32.setup(&onConnectedGamepad, &onDisconnectedGamepad);
+    BP32.forgetBluetoothKeys();
+
+    pinMode(IN1, OUTPUT);
+     pinMode(IN2, OUTPUT);
+     pinMode(ENA, OUTPUT);
+      pinMode(IN3, OUTPUT);
+     pinMode(IN4, OUTPUT);
+     pinMode(ENB, OUTPUT);
 
     ESP32PWM::allocateTimer(0);
 	ESP32PWM::allocateTimer(1);
@@ -159,21 +168,13 @@ void setup() {
     RememberColor();
     myServo.attach(servoPin);
 }
-
+bool checkAuto = true;
 // Arduino loop function. Runs in CPU 1
 void loop() {
-    //BP32.update();
-    /*
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        GamepadPtr myGamepad = myGamepads[i];
-        if (myGamepad && myGamepad->isConnected()) {
-            // TODO: Write your controller code here
-
-        }
-    }
-    */
-
-//color sensor
+    
+    if(!checkAuto){
+        
+            //color sensor
 
     //try to make the rotate until it detects the right color
     // in which then it moves forward
@@ -199,7 +200,7 @@ void loop() {
     Serial.print("\n");
 
     
-    if (abs(RGB[0]-r) < 2 && abs(RGB[1]-g) < 2, abs(RGB[2]-b) < 2 )
+    if (abs(RGB[0]-r) < 2 && abs(RGB[1]-g) < 2 && abs(RGB[2]-b) < 2 )
     {
         StopRotation(IN1, IN2); //stop spin left motor 
         StopRotation(IN3, IN4); // stop spin right motor
@@ -207,8 +208,103 @@ void loop() {
         Serial.print("\n");
         myServo.write(1750);
     }
+    else
+    {
+        myServo.write(1500);
+    }
     delay(500);
 
-    vTaskDelay(1);
+    vTaskDelay(500);
+    }
+    if (checkAuto){
+         BP32.update();
+    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+        GamepadPtr controller = myGamepads[i];
+        if (controller && controller->isConnected()) {
+            // divide by 512 to make max values -1 and 1
+            double leftX = controller->axisX(); // [-512,512] might give error or not work properly if axisX 
+            double leftY = -controller->axisY(); // [-512,512]
+            int MAX_WHEEL_SPEED = 200;
+            //int leftWheelSpeed = (leftY / 512.00) * MAX_WHEEL_SPEED;
+            //int rightWheelSpeed = (leftY / 512.00) * MAX_WHEEL_SPEED;
+            if(leftY >= 250){
+                int leftWheelSpeed = 255;
+                int rightWheelSpeed = 255;
+                SpinForward(IN1, IN2, ENA, leftWheelSpeed);
+                SpinForward(IN3, IN4, ENB, rightWheelSpeed);
+            }
+            /* 
+            if(controller->l1() == 1){
+             myServo.write(1600);
+            }
+            if(controller->l1() == 0){
+                myServo.write(1500);
+            }
+            if(controller->r1() == 1){
+                myServo.write(700);
+            }
+            if(controller->r1() == 0){
+                myServo.write(1500);
+            }
+             if(controller->r2() == 1){
+             
+            }
+            // make code more efficient by combining both statements and combining moving forwards and backwards
+            if (leftX < 0) { // x joystick value greater than 0 (rightside)
+               rightWheelSpeed -= (leftX / 512.00) * MAX_WHEEL_SPEED;
+                //Serial.println(controller->axisRX());
+                if (leftY >= 0) {
+                    SpinForward(IN1, IN2, ENA, abs(leftWheelSpeed));
+                    SpinForward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                } else if (leftY < 0) {
+                    SpinBackward(IN1, IN2, ENA, abs(leftWheelSpeed));
+                    SpinBackward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                }
+            } else if (leftX > 0) { // x joystick value less than 0 (leftside)
+                leftWheelSpeed -= (leftX / 512.00) * MAX_WHEEL_SPEED;
+                //Serial.println(controller->axisRX());
+                if (leftY >= 0) {
+                    SpinForward(IN1, IN2, ENA, abs(leftWheelSpeed));
+                    SpinForward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
+                } else if (leftY < 0) {
+                    SpinBackward(IN1, IN2, ENA, abs(leftWheelSpeed));
+                    SpinBackward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
+                }
+            } else {
+                if (leftY > 0) {
+                    SpinForward(IN1, IN2, ENA, abs(leftWheelSpeed));
+                    SpinForward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
+                } else if (leftY <= 0) {
+                    SpinBackward(IN1, IN2, ENA, abs(leftWheelSpeed));
+                    SpinBackward(IN3, IN4, ENB, abs(rightWheelSpeed));
+                    Serial.print(abs(leftWheelSpeed));
+                    Serial.print(abs(rightWheelSpeed));
+                }
+            }
+            //Serial.println(leftX);
+            //Serial.println(leftY);
+            //if(controller->axisRX() == 0) { // stop motor 1
+                //Serial.println(controller->axisRX());
+                // StopRotation(IN1, IN2); //stop spin left motor 
+                // StopRotation(IN3, IN4); // stop spin right motor 
+            //}
+            */
+        }
+    }
+ }
+   BP32.update();
+    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+        GamepadPtr controller = myGamepads[i];
+        if (controller && controller->isConnected()) {
+            if (controller->miscBack()) {
+             checkAuto = false;
+            }
+        }
+    }
 }
-

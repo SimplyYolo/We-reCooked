@@ -45,7 +45,7 @@ int lfspeed = 200;
 #define TIME_OUT 2500;
 
 //IRsensor
-#define LeftPin 15
+#define LeftPin 27
 ESP32SharpIR left(ESP32SharpIR::GP2Y0A21YK0F, LeftPin);
 
 #define RightPin 2
